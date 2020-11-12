@@ -12,19 +12,13 @@ import com.intellij.psi.util.CachedValueProvider
 import com.intellij.psi.util.CachedValuesManager
 import org.jetbrains.kotlin.analyzer.KotlinModificationTrackerService
 import org.jetbrains.kotlin.asJava.classes.KtLightClass
-import org.jetbrains.kotlin.asJava.classes.shouldNotBeVisibleAsLightClass
 import org.jetbrains.kotlin.idea.asJava.FirLightClassForFacade
-import org.jetbrains.kotlin.idea.asJava.FirLightClassForSymbol
-import org.jetbrains.kotlin.idea.frontend.api.analyze
-import org.jetbrains.kotlin.idea.util.ifTrue
+import org.jetbrains.kotlin.idea.asJava.`class`.tryCreateLightClass
 import org.jetbrains.kotlin.name.FqName
 import org.jetbrains.kotlin.psi.KtClassOrObject
-import org.jetbrains.kotlin.psi.KtEnumEntry
-import org.jetbrains.kotlin.psi.KtFile
 import org.jetbrains.kotlin.psi.KtScript
 
 class IDEKotlinAsJavaFirSupport(project: Project) : IDEKotlinAsJavaSupport(project) {
-
 
     //TODO Make caching
     override fun createLightClassForFacade(manager: PsiManager, facadeClassFqName: FqName, searchScope: GlobalSearchScope): KtLightClass? {
@@ -38,23 +32,11 @@ class IDEKotlinAsJavaFirSupport(project: Project) : IDEKotlinAsJavaSupport(proje
 
     override fun createLightClassForScript(script: KtScript): KtLightClass? = null
 
-    private fun KtClassOrObject.isSupportedByFitLightClasses() =
-        containingFile.let { it is KtFile && !it.isCompiled } &&
-                !isLocal /*TODO*/ &&
-                this !is KtEnumEntry /*TODO*/ &&
-                !shouldNotBeVisibleAsLightClass()
-
     override fun createLightClassForSourceDeclaration(classOrObject: KtClassOrObject): KtLightClass? =
-        classOrObject.isSupportedByFitLightClasses().ifTrue {
-            CachedValuesManager.getCachedValue(classOrObject) {
-                CachedValueProvider.Result
-                    .create(
-                        FirLightClassForSymbol(
-                            analyze(classOrObject) { classOrObject.getClassOrObjectSymbol() },
-                            classOrObject.manager
-                        ),
-                        KotlinModificationTrackerService.getInstance(classOrObject.project).outOfBlockModificationTracker
-                    )
-            }
+        CachedValuesManager.getCachedValue(classOrObject) {
+            CachedValueProvider.Result.create(
+                classOrObject.tryCreateLightClass(),
+                KotlinModificationTrackerService.getInstance(classOrObject.project).outOfBlockModificationTracker
+            )
         }
 }

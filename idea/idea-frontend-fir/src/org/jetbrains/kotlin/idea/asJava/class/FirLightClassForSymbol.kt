@@ -9,13 +9,11 @@ import com.intellij.openapi.util.Comparing
 import com.intellij.psi.*
 import com.intellij.psi.impl.InheritanceImplUtil
 import com.intellij.psi.impl.PsiClassImplUtil
-import com.intellij.psi.impl.PsiSuperMethodImplUtil
 import com.intellij.psi.search.SearchScope
 import com.intellij.psi.stubs.IStubElementType
 import com.intellij.psi.stubs.StubElement
 import com.intellij.psi.util.CachedValueProvider
 import com.intellij.psi.util.CachedValuesManager
-import com.intellij.util.IncorrectOperationException
 import org.jetbrains.annotations.NonNls
 import org.jetbrains.kotlin.analyzer.KotlinModificationTrackerService
 import org.jetbrains.kotlin.asJava.classes.*
@@ -23,6 +21,7 @@ import org.jetbrains.kotlin.asJava.elements.KtLightField
 import org.jetbrains.kotlin.asJava.elements.KtLightIdentifier
 import org.jetbrains.kotlin.asJava.elements.KtLightMethod
 import org.jetbrains.kotlin.fir.symbols.StandardClassIds
+import org.jetbrains.kotlin.idea.asJava.fields.FirLightFieldForEnumEntry
 import org.jetbrains.kotlin.idea.frontend.api.analyze
 import org.jetbrains.kotlin.idea.frontend.api.fir.analyzeWithSymbolAsContext
 import org.jetbrains.kotlin.idea.frontend.api.symbols.*
@@ -36,14 +35,12 @@ import org.jetbrains.kotlin.psi.*
 import org.jetbrains.kotlin.psi.debugText.getDebugText
 import org.jetbrains.kotlin.psi.psiUtil.isObjectLiteral
 import org.jetbrains.kotlin.psi.stubs.KotlinClassOrObjectStub
-import javax.swing.Icon
 import kotlin.collections.ArrayList
 
-class FirLightClassForSymbol(
+internal open class FirLightClassForSymbol(
     private val classOrObjectSymbol: KtClassOrObjectSymbol,
     manager: PsiManager
-) :
-    FirLightClassBase(manager),
+) : FirLightClassBase(manager),
     StubBasedPsiElement<KotlinClassOrObjectStub<out KtClassOrObject>> {
 
     private val isTopLevel: Boolean = classOrObjectSymbol.symbolKind == KtSymbolKind.TOP_LEVEL
@@ -151,10 +148,13 @@ class FirLightClassForSymbol(
         val result = mutableListOf<KtLightMethod>()
 
         analyzeWithSymbolAsContext(classOrObjectSymbol) {
-            //TODO filterNot { it.isHiddenByDeprecation(support) }
             val callableSymbols = classOrObjectSymbol.getDeclaredMemberScope().getCallableSymbols()
-            val visibleDeclarations = callableSymbols.filterNot {
-                isInterface && it is KtFunctionSymbol && it.visibility == KtSymbolVisibility.PRIVATE
+            val visibleDeclarations = callableSymbols.applyIf(isInterface) {
+                filterNot { it is KtFunctionSymbol && it.visibility == KtSymbolVisibility.PRIVATE }
+            }.applyIf(isEnum) {
+                filterNot { function ->
+                    function is KtFunctionSymbol && function.name.asString().let { it == "values" || it == "valueOf" }
+                }
             }
 
             createMethods(visibleDeclarations, isTopLevel = false, result)
@@ -207,12 +207,19 @@ class FirLightClassForSymbol(
         }
 
         analyzeWithSymbolAsContext(classOrObjectSymbol) {
-            val callableSymbols = classOrObjectSymbol.getDeclaredMemberScope().getCallableSymbols()
+            val propertySymbols = classOrObjectSymbol.getDeclaredMemberScope().getCallableSymbols()
                 .filterIsInstance<KtPropertySymbol>()
                 .applyIf(classOrObjectSymbol.classKind == KtClassKind.COMPANION_OBJECT) {
                     filter { it.hasJvmFieldAnnotation() || it.isConst }
                 }
-            createFields(callableSymbols, isTopLevel = false, result)
+            createFields(propertySymbols, isTopLevel = false, result)
+
+            if (isEnum) {
+                classOrObjectSymbol.getDeclaredMemberScope().getCallableSymbols()
+                    .filterIsInstance<KtEnumEntrySymbol>()
+                    .mapTo(result) { FirLightFieldForEnumEntry(it, this@FirLightClassForSymbol, null) }
+            }
+
         }
 
         result
@@ -234,9 +241,6 @@ class FirLightClassForSymbol(
     override fun isEquivalentTo(another: PsiElement?): Boolean =
         basicIsEquivalentTo(this, another) ||
                 another is PsiClass && qualifiedName != null && Comparing.equal(another.qualifiedName, qualifiedName)
-
-    override fun getElementIcon(flags: Int): Icon? =
-        throw UnsupportedOperationException("This should be done by JetIconProvider")
 
     override fun equals(other: Any?): Boolean =
         this === other ||
@@ -265,10 +269,6 @@ class FirLightClassForSymbol(
     override fun isInheritor(baseClass: PsiClass, checkDeep: Boolean): Boolean =
         InheritanceImplUtil.isInheritor(this, baseClass, checkDeep)
 
-    @Throws(IncorrectOperationException::class)
-    override fun setName(@NonNls name: String): PsiElement =
-        throw IncorrectOperationException()
-
     override fun toString() =
         "${this::class.java.simpleName}:${kotlinOrigin?.getDebugText()}"
 
@@ -285,12 +285,6 @@ class FirLightClassForSymbol(
     override fun getSuperClass(): PsiClass? = PsiClassImplUtil.getSuperClass(this)
     override fun getSupers(): Array<PsiClass> = PsiClassImplUtil.getSupers(this)
     override fun getSuperTypes(): Array<PsiClassType> = PsiClassImplUtil.getSuperTypes(this)
-    override fun getVisibleSignatures(): MutableCollection<HierarchicalMethodSignature> = PsiSuperMethodImplUtil.getVisibleSignatures(this)
-
-    override fun getRBrace(): PsiElement? = null
-    override fun getLBrace(): PsiElement? = null
-
-    override fun getInitializers(): Array<PsiClassInitializer> = emptyArray()
 
     override fun getContainingClass(): PsiClass? {
 
