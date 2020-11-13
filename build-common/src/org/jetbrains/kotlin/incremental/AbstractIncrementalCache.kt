@@ -52,8 +52,9 @@ abstract class AbstractIncrementalCache<ClassName>(
 ) : BasicMapsOwner(workingDir), IncrementalCacheCommon {
     private val LOG = Logger.getInstance(this.javaClass)
 
+
     private fun debug(msg: String) {
-        LOG.info(Thread.currentThread().name + "\t" + msg)
+        LOG.info("${Thread.currentThread().id}\t${Thread.currentThread().name}\t$msg")
     }
 
     companion object {

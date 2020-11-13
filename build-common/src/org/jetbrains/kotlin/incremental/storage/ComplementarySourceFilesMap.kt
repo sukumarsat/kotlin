@@ -15,8 +15,9 @@ class ComplementarySourceFilesMap(
 ) : BasicStringMap<Collection<String>>(storageFile, PathStringDescriptor, StringCollectionExternalizer) {
     val LOG = Logger.getInstance(this.javaClass.name)
 
+
     private fun debug(msg: String) {
-        LOG.info(Thread.currentThread().name + "\t" + msg)
+        LOG.info("${Thread.currentThread().id}\t${Thread.currentThread().name}\t$msg")
     }
 
     operator fun set(sourceFile: File, complementaryFiles: Collection<File>) {

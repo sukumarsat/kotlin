@@ -26,7 +26,7 @@ open class BasicMapsOwner(val cachesDir: File) {
     private val LOG = Logger.getInstance(BasicMapsOwner.javaClass)
 
     private fun debug(msg: String) {
-        LOG.info(Thread.currentThread().name + "\t" + msg)
+        LOG.info("${Thread.currentThread().id}\t${Thread.currentThread().name}\t$msg")
     }
 
     companion object {
