@@ -33,7 +33,7 @@ internal class KtFirEnumEntrySymbol(
 ) : KtEnumEntrySymbol(), KtFirSymbol<FirEnumEntry> {
     override val firRef = firRef(fir, resolveState)
 
-    val initializerFirRef: FirRefWithValidityCheck<FirAnonymousObject>? = firRef.withFir {
+    val initializerFirRef: FirRefWithValidityCheck<FirAnonymousObject>? = firRef.withFir(FirResolvePhase.IMPLICIT_TYPES_BODY_RESOLVE) {
         it.initializer?.let { anonymousInitializer ->
             check(anonymousInitializer is FirAnonymousObject)
             firRef(anonymousInitializer, resolveState)
@@ -47,8 +47,6 @@ internal class KtFirEnumEntrySymbol(
 
     override val containingEnumClassIdIfNonLocal: ClassId?
         get() = firRef.withFir { it.containingClass()?.classId?.takeUnless { it.isLocal } }
-
-    override val hasBody: Boolean get() = firRef.withFir { it.initializer != null }
 
     override fun createPointer(): KtSymbolPointer<KtEnumEntrySymbol> {
         KtPsiBasedSymbolPointer.createForSymbolFromSource(this)?.let { return it }
