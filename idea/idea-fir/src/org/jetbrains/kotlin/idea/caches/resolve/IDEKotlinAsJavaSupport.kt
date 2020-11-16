@@ -8,12 +8,9 @@ package org.jetbrains.kotlin.idea.caches.resolve
 import com.intellij.openapi.project.Project
 import com.intellij.psi.PsiManager
 import com.intellij.psi.search.GlobalSearchScope
-import com.intellij.psi.util.CachedValueProvider
-import com.intellij.psi.util.CachedValuesManager
-import org.jetbrains.kotlin.analyzer.KotlinModificationTrackerService
 import org.jetbrains.kotlin.asJava.classes.KtLightClass
 import org.jetbrains.kotlin.idea.asJava.FirLightClassForFacade
-import org.jetbrains.kotlin.idea.asJava.`class`.tryCreateLightClass
+import org.jetbrains.kotlin.idea.asJava.classes.getOrCreateFirLightClass
 import org.jetbrains.kotlin.name.FqName
 import org.jetbrains.kotlin.psi.KtClassOrObject
 import org.jetbrains.kotlin.psi.KtScript
@@ -33,10 +30,5 @@ class IDEKotlinAsJavaFirSupport(project: Project) : IDEKotlinAsJavaSupport(proje
     override fun createLightClassForScript(script: KtScript): KtLightClass? = null
 
     override fun createLightClassForSourceDeclaration(classOrObject: KtClassOrObject): KtLightClass? =
-        CachedValuesManager.getCachedValue(classOrObject) {
-            CachedValueProvider.Result.create(
-                classOrObject.tryCreateLightClass(),
-                KotlinModificationTrackerService.getInstance(classOrObject.project).outOfBlockModificationTracker
-            )
-        }
+        getOrCreateFirLightClass(classOrObject)
 }

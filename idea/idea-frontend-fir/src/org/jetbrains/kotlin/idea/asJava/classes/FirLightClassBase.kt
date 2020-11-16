@@ -33,19 +33,8 @@ import org.jetbrains.kotlin.analyzer.KotlinModificationTrackerService
 import org.jetbrains.kotlin.asJava.classes.KotlinClassInnerStuffCache
 import org.jetbrains.kotlin.asJava.classes.KotlinClassInnerStuffCache.Companion.processDeclarationsInEnum
 import org.jetbrains.kotlin.asJava.classes.KtLightClass
-import org.jetbrains.kotlin.asJava.classes.METHOD_INDEX_BASE
 import org.jetbrains.kotlin.asJava.classes.cannotModify
-import org.jetbrains.kotlin.asJava.elements.KtLightField
-import org.jetbrains.kotlin.asJava.elements.KtLightMethod
-import org.jetbrains.kotlin.descriptors.annotations.AnnotationUseSiteTarget
 import org.jetbrains.kotlin.idea.KotlinLanguage
-
-import org.jetbrains.kotlin.idea.frontend.api.symbols.KtCallableSymbol
-import org.jetbrains.kotlin.idea.frontend.api.symbols.KtConstructorSymbol
-import org.jetbrains.kotlin.idea.frontend.api.symbols.KtFunctionSymbol
-import org.jetbrains.kotlin.idea.frontend.api.symbols.KtPropertySymbol
-import org.jetbrains.kotlin.idea.frontend.api.symbols.markers.KtAnnotatedSymbol
-import java.util.*
 import javax.swing.Icon
 
 abstract class FirLightClassBase protected constructor(manager: PsiManager) : LightElement(manager, KotlinLanguage.INSTANCE), PsiClass,
@@ -162,122 +151,6 @@ abstract class FirLightClassBase protected constructor(manager: PsiManager) : Li
             visitor.visitClass(this)
         } else {
             visitor.visitElement(this)
-        }
-    }
-
-    protected fun createMethods(declarations: Sequence<KtCallableSymbol>, isTopLevel: Boolean, result: MutableList<KtLightMethod>) {
-        var methodIndex = METHOD_INDEX_BASE
-        for (declaration in declarations) {
-
-            if (declaration is KtFunctionSymbol && declaration.isInline) continue
-
-            if (declaration is KtAnnotatedSymbol && declaration.hasJvmSyntheticAnnotation(annotationUseSiteTarget = null)) continue
-
-            if (declaration is KtAnnotatedSymbol && declaration.isHiddenByDeprecation(annotationUseSiteTarget = null)) continue
-
-            when (declaration) {
-                is KtFunctionSymbol -> {
-                    result.add(
-                        FirLightSimpleMethodForSymbol(
-                            functionSymbol = declaration,
-                            lightMemberOrigin = null,
-                            containingClass = this@FirLightClassBase,
-                            isTopLevel = isTopLevel,
-                            methodIndex = methodIndex++
-                        )
-                    )
-
-                    if (declaration.hasJvmOverloadsAnnotation()) {
-                        val skipMask = BitSet(declaration.valueParameters.size)
-
-                        for (i in declaration.valueParameters.size - 1 downTo 0) {
-
-                            if (!declaration.valueParameters[i].hasDefaultValue) continue
-
-                            skipMask.set(i)
-
-                            result.add(
-                                FirLightSimpleMethodForSymbol(
-                                    functionSymbol = declaration,
-                                    lightMemberOrigin = null,
-                                    containingClass = this@FirLightClassBase,
-                                    isTopLevel = isTopLevel,
-                                    methodIndex = methodIndex++,
-                                    argumentsSkipMask = skipMask
-                                )
-                            )
-                        }
-                    }
-                }
-                is KtConstructorSymbol -> {
-                    result.add(
-                        FirLightConstructorForSymbol(
-                            constructorSymbol = declaration,
-                            lightMemberOrigin = null,
-                            containingClass = this@FirLightClassBase,
-                            methodIndex++
-                        )
-                    )
-                }
-                is KtPropertySymbol -> {
-
-                    if (declaration.hasJvmFieldAnnotation()) continue
-
-                    val getter = declaration.getter?.takeIf {
-                        !declaration.hasJvmSyntheticAnnotation(AnnotationUseSiteTarget.PROPERTY_GETTER) &&
-                                !it.isInline &&
-                                !declaration.isHiddenByDeprecation(AnnotationUseSiteTarget.PROPERTY_GETTER)
-                    }
-
-                    if (getter != null) {
-                        result.add(
-                            FirLightAccessorMethodForSymbol(
-                                propertyAccessorSymbol = getter,
-                                containingPropertySymbol = declaration,
-                                lightMemberOrigin = null,
-                                containingClass = this@FirLightClassBase,
-                                isTopLevel = isTopLevel
-                            )
-                        )
-                    }
-
-                    val setter = declaration.setter?.takeIf {
-                        !declaration.hasJvmSyntheticAnnotation(AnnotationUseSiteTarget.PROPERTY_SETTER) &&
-                                !it.isInline &&
-                                !declaration.isHiddenByDeprecation(AnnotationUseSiteTarget.PROPERTY_GETTER)
-                    }
-
-                    if (setter != null) {
-                        result.add(
-                            FirLightAccessorMethodForSymbol(
-                                propertyAccessorSymbol = setter,
-                                containingPropertySymbol = declaration,
-                                lightMemberOrigin = null,
-                                containingClass = this@FirLightClassBase,
-                                isTopLevel = isTopLevel
-                            )
-                        )
-                    }
-                }
-            }
-        }
-    }
-
-    protected fun createFields(declarations: Sequence<KtCallableSymbol>, isTopLevel: Boolean, result: MutableList<KtLightField>) {
-        //TODO isHiddenByDeprecation
-        for (declaration in declarations) {
-            if (declaration !is KtPropertySymbol) continue
-
-            if (!declaration.hasBackingField) continue
-            if (declaration.hasJvmSyntheticAnnotation(AnnotationUseSiteTarget.FIELD)) continue
-            result.add(
-                FirLightFieldForPropertySymbol(
-                    propertySymbol = declaration,
-                    containingClass = this@FirLightClassBase,
-                    lightMemberOrigin = null,
-                    isTopLevel = isTopLevel
-                )
-            )
         }
     }
 }
