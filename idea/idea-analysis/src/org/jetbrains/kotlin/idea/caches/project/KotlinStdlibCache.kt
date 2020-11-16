@@ -12,14 +12,15 @@ import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.psi.search.DelegatingGlobalSearchScope
 import com.intellij.psi.search.GlobalSearchScope
 import com.intellij.util.indexing.FileBasedIndex
-import org.jetbrains.kotlin.builtins.StandardNames
 import org.jetbrains.kotlin.caches.project.cacheInvalidatingOnRootModifications
 import org.jetbrains.kotlin.idea.util.application.runReadAction
-import org.jetbrains.kotlin.idea.vfilefinder.KotlinBuiltInsMetadataIndex
+import org.jetbrains.kotlin.idea.vfilefinder.KotlinStdlibIndex
+import org.jetbrains.kotlin.name.FqName
 import java.util.concurrent.ConcurrentHashMap
 
 interface KotlinStdlibCache {
     fun isStdlib(libraryInfo: LibraryInfo): Boolean
+    fun isStdlibDependency(libraryInfo: LibraryInfo): Boolean
 
     companion object {
         fun getInstance(project: Project): KotlinStdlibCache =
@@ -29,11 +30,15 @@ interface KotlinStdlibCache {
 }
 
 class KotlinStdlibCacheImpl(val project: Project) : KotlinStdlibCache {
-    private val cache = project.cacheInvalidatingOnRootModifications {
+    private val stdlibCache = project.cacheInvalidatingOnRootModifications {
         ConcurrentHashMap<LibraryInfo, Boolean>()
     }
 
-    class LibraryScope(
+    private val stdlibDependencyCache = project.cacheInvalidatingOnRootModifications {
+        ConcurrentHashMap<LibraryInfo, Boolean>()
+    }
+
+    private class LibraryScope(
         project: Project,
         private val directories: Set<VirtualFile>
     ) : DelegatingGlobalSearchScope(GlobalSearchScope.allScope(project)) {
@@ -52,15 +57,28 @@ class KotlinStdlibCacheImpl(val project: Project) : KotlinStdlibCache {
         override fun toString() = "All files under: $directories"
     }
 
+    private fun libraryScopeContainsIndexedFilesForNames(libraryInfo: LibraryInfo, names: Collection<FqName>) = runReadAction {
+        names.any { name ->
+            FileBasedIndex.getInstance().getContainingFiles(
+                KotlinStdlibIndex.KEY,
+                name,
+                LibraryScope(project, libraryInfo.library.rootProvider.getFiles(OrderRootType.CLASSES).toSet())
+            ).isNotEmpty()
+        }
+    }
+
+    private fun libraryScopeContainsIndexedFilesForName(libraryInfo: LibraryInfo, name: FqName) =
+        libraryScopeContainsIndexedFilesForNames(libraryInfo, listOf(name))
+
     override fun isStdlib(libraryInfo: LibraryInfo): Boolean {
-        return cache.getOrPut(libraryInfo) {
-            runReadAction {
-                FileBasedIndex.getInstance().getContainingFiles(
-                    KotlinBuiltInsMetadataIndex.KEY,
-                    StandardNames.BUILT_INS_PACKAGE_FQ_NAME,
-                    LibraryScope(project, libraryInfo.library.rootProvider.getFiles(OrderRootType.CLASSES).toSet())
-                ).isNotEmpty()
-            }
+        return stdlibCache.getOrPut(libraryInfo) {
+            libraryScopeContainsIndexedFilesForName(libraryInfo, KotlinStdlibIndex.KOTLIN_STDLIB_NAME)
+        }
+    }
+
+    override fun isStdlibDependency(libraryInfo: LibraryInfo): Boolean {
+        return stdlibDependencyCache.getOrPut(libraryInfo) {
+            libraryScopeContainsIndexedFilesForNames(libraryInfo, KotlinStdlibIndex.STANDARD_LIBRARY_DEPENDENCY_NAMES)
         }
     }
 }
@@ -71,6 +89,5 @@ fun LibraryInfo.isCoreKotlinLibrary(project: Project): Boolean =
 fun LibraryInfo.isKotlinStdlib(project: Project): Boolean =
     KotlinStdlibCache.getInstance(project).isStdlib(this)
 
-// TODO: proper condition and caching
 fun LibraryInfo.isKotlinStdlibDependency(project: Project): Boolean =
-    this.name.asString().split(":").any { it.contains("stdlib-common") }
+    KotlinStdlibCache.getInstance(project).isStdlibDependency(this)
