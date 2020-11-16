@@ -8,7 +8,7 @@ inline class IC(val s: String)
 
 fun ordinary(s: String, ic: IC): String = s + ic.s
 
-fun suspend(s: String, ic: IC): String = s + ic.s
+suspend fun suspend(s: String, ic: IC): String = s + ic.s
 
 // FILE: 2.kt
 import kotlin.coroutines.*
