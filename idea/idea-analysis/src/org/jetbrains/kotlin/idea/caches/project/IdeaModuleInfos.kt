@@ -371,8 +371,8 @@ abstract class LibraryInfo(override val project: Project, val library: Library) 
         * the inability to get real dependencies from IDEA model. So moving stdlib with all dependencies
         * down is a questionable option.
         */
-        if (!IdeBuiltInsLoadingState.isFromClassLoader && this.isKotlinStdlib(project)) {
-            libraries.filterTo(result) { it.isKotlinStdlibDependency(project) }
+        if (!IdeBuiltInsLoadingState.isFromClassLoader && this.isCoreKotlinLibrary(project)) {
+            libraries.filterTo(result) { it.isCoreKotlinLibrary(project) }
         } else {
             result.addAll(libraries)
         }
