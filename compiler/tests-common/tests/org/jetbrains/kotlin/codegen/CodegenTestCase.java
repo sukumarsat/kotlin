@@ -63,9 +63,7 @@ import static org.jetbrains.kotlin.cli.common.output.OutputUtilsKt.writeAllTo;
 import static org.jetbrains.kotlin.codegen.CodegenTestUtil.*;
 import static org.jetbrains.kotlin.codegen.TestUtilsKt.extractUrls;
 import static org.jetbrains.kotlin.test.KotlinTestUtils.getAnnotationsJar;
-import static org.jetbrains.kotlin.test.clientserver.TestProcessServerKt.getBoxMethodOrNull;
-import static org.jetbrains.kotlin.test.clientserver.TestProcessServerKt.getGeneratedClass;
-import static org.jetbrains.kotlin.test.clientserver.TestProcessServerKt.runBoxMethod;
+import static org.jetbrains.kotlin.test.clientserver.TestProcessServerKt.*;
 
 public abstract class CodegenTestCase extends KotlinBaseTest<KotlinBaseTest.TestFile> {
     private static final String DEFAULT_TEST_FILE_NAME = "a_test";
@@ -547,12 +545,20 @@ public abstract class CodegenTestCase extends KotlinBaseTest<KotlinBaseTest.Test
         return javacOptions;
     }
 
+    private static final boolean IS_SOURCE_6_STILL_SUPPORTED =
+            // JDKs up to 11 do support -source/target 1.6, but later -- don't.
+            Arrays.asList("1.6", "1.7", "1.8", "9", "10", "11").contains(System.getProperty("java.specification.version"));
+
     private static void updateJavacOptions(@NotNull List<String> javacOptions) {
-        if (JAVA_COMPILATION_TARGET != null && !javacOptions.contains("-target")) {
+        String javaTarget = JAVA_COMPILATION_TARGET != null && !javacOptions.contains("-target")
+                            ? JAVA_COMPILATION_TARGET
+                            : IS_SOURCE_6_STILL_SUPPORTED ? "1.6" : null;
+
+        if (javaTarget != null) {
             javacOptions.add("-source");
-            javacOptions.add(JAVA_COMPILATION_TARGET);
+            javacOptions.add(javaTarget);
             javacOptions.add("-target");
-            javacOptions.add(JAVA_COMPILATION_TARGET);
+            javacOptions.add(javaTarget);
         }
     }
 
