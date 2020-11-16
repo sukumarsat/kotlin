@@ -8,36 +8,56 @@ package org.jetbrains.kotlin.caching
 import org.jetbrains.kotlin.cli.common.arguments.Argument
 import org.jetbrains.kotlin.cli.common.arguments.CommonToolArguments
 import org.jetbrains.kotlin.cli.common.arguments.isAdvanced
+import java.lang.reflect.Proxy
 import kotlin.reflect.KProperty1
+import kotlin.reflect.full.declaredMemberProperties
 
 typealias CachedCompilerArgumentBySourceSet = Map<String, CachedArgsInfo>
 typealias FlatCompilerArgumentBySourceSet = Map<String, FlatArgsInfo>
 
-val KProperty1<*, *>.argumentAnnotation
-    get() = annotations.first { it is Argument } as Argument
+const val ARGUMENT_ANNOTATION_CLASS = "org.jetbrains.kotlin.cli.common.arguments.Argument"
+const val COMMON_ARGUMENTS_CLASS = "org.jetbrains.kotlin.cli.common.arguments.CommonCompilerArguments"
+const val JVM_ARGUMENTS_CLASS = "org.jetbrains.kotlin.cli.common.arguments.K2JVMCompilerArguments"
+const val METADATA_ARGUMENTS_CLASS = "org.jetbrains.kotlin.cli.common.arguments.K2MetadataCompilerArguments"
+
+fun obtainArgumentAnnotation(classLoader: ClassLoader?, className: String, propertyName: String): Argument? {
+    val (kClazz, argumentKClazz) = try {
+        Class.forName(className, false, classLoader).kotlin to Class.forName(ARGUMENT_ANNOTATION_CLASS, false, classLoader).kotlin
+    } catch (e: ClassNotFoundException) {
+        //It can be old version mpp gradle plugin. Supported only 1.4+
+        return null
+    }
+
+    val requiredProperty = kClazz.declaredMemberProperties.find { it.name == propertyName }
+    val argumentAnnotation = requiredProperty?.annotations?.filter { Proxy.isProxyClass(it.javaClass) }
+    return argumentAnnotation as? Argument
+}
 
 /**
  * Creates deep copy in order to avoid holding links to Proxy objects created by gradle tooling api
  */
-fun CachedCompilerArgumentBySourceSet.deepCopy(): CachedCompilerArgumentBySourceSet = entries.associate { it.key to CachedArgsInfoImpl(it.value) }
+fun CachedCompilerArgumentBySourceSet.deepCopy(): CachedCompilerArgumentBySourceSet =
+    entries.associate { it.key to CachedArgsInfoImpl(it.value) }
 
-fun <T : CommonToolArguments> FlatCompilerArgumentsBucket.extractSingleGeneralArgumentOrNull(
-    property: KProperty1<T, *>
+fun FlatCompilerArgumentsBucket.extractSingleGeneralArgumentOrNull(
+    classLoader: ClassLoader, className: String, methodName: String
 ): String? {
-    val argumentAnno = property.argumentAnnotation ?: return null
-    val propertyName = argumentAnno.value
-    return if (argumentAnno.isAdvanced) {
+    val propertyArgument = obtainArgumentAnnotation(classLoader, className, methodName) ?: return null
+    val propertyName = propertyArgument.value
+    return if (propertyArgument.isAdvanced) {
         generalArguments.firstOrNull { it.startsWith(propertyName) }?.removePrefix("${propertyName}=")
     } else {
         generalArguments.indexOf(propertyName).takeIf { it != -1 }?.let { generalArguments.getOrNull(it + 1) }
     }
 }
 
-fun <T : CommonToolArguments> FlatCompilerArgumentsBucket.setSingleGeneralArgument(
-    property: KProperty1<T, *>,
+fun FlatCompilerArgumentsBucket.setSingleGeneralArgument(
+    classLoader: ClassLoader,
+    className: String,
+    propertyName: String,
     newValue: String?
 ) {
-    val propertyArgument = property.argumentAnnotation ?: return
+    val propertyArgument = obtainArgumentAnnotation(classLoader, className, propertyName) ?: return
     val argumentName = propertyArgument.value
     if (propertyArgument.isAdvanced) {
         generalArguments.removeAll { it.startsWith(argumentName) }
@@ -55,40 +75,43 @@ fun <T : CommonToolArguments> FlatCompilerArgumentsBucket.setSingleGeneralArgume
     }
 }
 
-fun <T : CommonToolArguments> FlatCompilerArgumentsBucket.extractGeneralFlag(
-    property: KProperty1<T, *>
-): Boolean {
-    val argumentAnnotation = property.argumentAnnotation ?: return false
-    val propertyName = argumentAnnotation.value
-    return generalArguments.contains(propertyName)
-}
+fun FlatCompilerArgumentsBucket.extractGeneralFlag(
+    classLoader: ClassLoader,
+    className: String,
+    propertyName: String
+): Boolean = obtainArgumentAnnotation(classLoader, className, propertyName)?.value in generalArguments
 
 fun <T : CommonToolArguments> FlatCompilerArgumentsBucket.setGeneralFlag(
-    property: KProperty1<T, *>,
+    classLoader: ClassLoader,
+    className: String,
+    propertyName: String,
     newValue: Boolean
 ) {
-    val argumentAnno = property.argumentAnnotation ?: return
-    val propertyName = argumentAnno.value
-    if (newValue && !generalArguments.contains(propertyName)) generalArguments.add(propertyName)
-    if (!newValue) generalArguments.remove(propertyName)
+    val propertyArgument = obtainArgumentAnnotation(classLoader, className, propertyName) ?: return
+    val propertyArgumentName = propertyArgument.value
+    if (newValue && propertyArgumentName !in generalArguments) generalArguments.add(propertyName)
+    if (!newValue) generalArguments.remove(propertyArgumentName)
 }
 
-fun <T : CommonToolArguments> FlatCompilerArgumentsBucket.extractArrayGeneralArgument(
-    property: KProperty1<T, *>
+fun FlatCompilerArgumentsBucket.extractArrayGeneralArgument(
+    classLoader: ClassLoader,
+    className: String,
+    propertyName: String
 ): Array<String>? {
-    val delimeter = property.argumentAnnotation?.delimiter ?: return null
-    return extractSingleGeneralArgumentOrNull(property)
+    val delimeter = obtainArgumentAnnotation(classLoader, className, propertyName)?.delimiter ?: return null
+    return extractSingleGeneralArgumentOrNull(classLoader, className, propertyName)
         ?.split(delimeter)
         ?.toTypedArray()
 }
 
 
 fun <T : CommonToolArguments> FlatCompilerArgumentsBucket.setArrayGeneralArgument(
-    property: KProperty1<T, *>,
+    classLoader: ClassLoader,
+    className: String,
+    propertyName: String,
     newValue: Array<String>?
 ) {
-    val delimeter = property.argumentAnnotation?.delimiter ?: return
+    val delimeter = obtainArgumentAnnotation(classLoader, className, propertyName)?.delimiter ?: return
     val joined = newValue?.joinToString(delimeter)
-    setSingleGeneralArgument(property, joined)
+    setSingleGeneralArgument(classLoader, className, propertyName, joined)
 }
-
