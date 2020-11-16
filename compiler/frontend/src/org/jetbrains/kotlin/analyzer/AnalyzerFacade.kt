@@ -127,15 +127,17 @@ abstract class ResolverForModuleFactory {
 class LazyModuleDependencies<M : ModuleInfo>(
     storageManager: StorageManager,
     private val module: M,
-    firstDependency: M? = null,
+    firstDependency: M?,
     private val resolverForProject: AbstractResolverForProject<M>
 ) : ModuleDependencies {
 
     private val dependencies = storageManager.createLazyValue {
 
         val moduleDescriptors = mutableSetOf<ModuleDescriptorImpl>()
-        firstDependency?.let {
-            moduleDescriptors.add(resolverForProject.descriptorForModule(it))
+        val sdkDescriptor = firstDependency?.let {
+            val descriptor = resolverForProject.descriptorForModule(it)
+            moduleDescriptors.add(descriptor)
+            descriptor
         }
         val moduleDescriptor = resolverForProject.descriptorForModule(module)
         val dependencyOnBuiltIns = module.dependencyOnBuiltIns()
@@ -151,6 +153,11 @@ class LazyModuleDependencies<M : ModuleInfo>(
         if (dependencyOnBuiltIns == ModuleInfo.DependencyOnBuiltIns.LAST) {
             moduleDescriptors.add(moduleDescriptor.builtIns.builtInsModule)
         }
+
+        sdkDescriptor?.builtIns?.builtInsModule?.let { sdkBuiltinsDescriptor ->
+            moduleDescriptors.add(sdkBuiltinsDescriptor)
+        }
+
         moduleDescriptors.toList()
     }
 
