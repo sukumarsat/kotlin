@@ -145,15 +145,11 @@ class JvmVersionRequirementTest : AbstractVersionRequirementTest() {
         doTest(
             VersionRequirement.Version(1, 3, 0), DeprecationLevel.ERROR, null, LANGUAGE_VERSION, null,
             fqNamesWithRequirements = listOf(
-                "test.propertyOfInlineClassType"
-            ),
-            shouldBeSingleRequirement = true,
-            customLanguageVersion = LanguageVersion.KOTLIN_1_4
-        )
-        doTest(
-            VersionRequirement.Version(1, 3, 0), DeprecationLevel.ERROR, null, LANGUAGE_VERSION, null,
-            fqNamesWithRequirements = listOf(
-                "test.C.propertyOfInlineClassType"
+                "test.propertyOfInlineClassType",
+                "test.C.propertyOfInlineClassType",
+                "test.C.returnsInlineClassTypeJvmName",
+                "test.returnsInlineClassType",
+                "test.C.returnsInlineClassType"
             ),
             shouldBeSingleRequirement = true,
             customLanguageVersion = LanguageVersion.KOTLIN_1_3
@@ -163,15 +159,7 @@ class JvmVersionRequirementTest : AbstractVersionRequirementTest() {
         doTest(
             VersionRequirement.Version(1, 4, 30), DeprecationLevel.ERROR, null, COMPILER_VERSION, null,
             fqNamesWithRequirements = listOf(
-                "test.C.returnsInlineClassTypeJvmName",
-                "test.returnsInlineClassType"
-            ),
-            shouldBeSingleRequirement = true,
-            customLanguageVersion = LanguageVersion.KOTLIN_1_4
-        )
-        doTest(
-            VersionRequirement.Version(1, 4, 30), DeprecationLevel.ERROR, null, COMPILER_VERSION, null,
-            fqNamesWithRequirements = listOf(
+                "test.C.propertyOfInlineClassType",
                 "test.C.returnsInlineClassType"
             ),
             shouldBeSingleRequirement = false,
@@ -193,6 +181,17 @@ class JvmVersionRequirementTest : AbstractVersionRequirementTest() {
                 "test.async4",
                 "test.asyncVal"
             )
+        )
+    }
+
+    fun testInlineClassesAndRelevantDeclarations1430() {
+        doTest(
+            VersionRequirement.Version(1, 4, 30), DeprecationLevel.ERROR, null, COMPILER_VERSION, null,
+            fqNamesWithRequirements = listOf(
+                "test.simpleFun",
+                "test.aliasedFun",
+            ),
+            shouldBeSingleRequirement = false
         )
     }
 }
