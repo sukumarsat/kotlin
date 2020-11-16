@@ -130,7 +130,8 @@ class JvmVersionRequirementTest : AbstractVersionRequirementTest() {
 
     fun testInlineClassReturnTypeMangled() {
         // Class members returning inline class values are mangled,
-        // and have "since 1.4" version requirement along with "since 1.3" version requirement for inline class in signature
+        // and have "since 1.4", "require 1.4.30" version requirement along with
+        // "since 1.3" version requirement for inline class in signature
         doTest(
             VersionRequirement.Version(1, 4, 0), DeprecationLevel.ERROR, null, LANGUAGE_VERSION, null,
             fqNamesWithRequirements = listOf(
@@ -140,7 +141,27 @@ class JvmVersionRequirementTest : AbstractVersionRequirementTest() {
             customLanguageVersion = LanguageVersion.KOTLIN_1_4,
             shouldBeSingleRequirement = false
         )
+        doTest(
+            VersionRequirement.Version(1, 4, 30), DeprecationLevel.ERROR, null, COMPILER_VERSION, null,
+            fqNamesWithRequirements = listOf(
+                "test.C.propertyOfInlineClassType",
+                "test.C.returnsInlineClassType",
+            ),
+            shouldBeSingleRequirement = false,
+            customLanguageVersion = LanguageVersion.KOTLIN_1_4
+        )
         // Top-level functions and properties returning inline class values are NOT mangled,
+        // and have "since 1.3" version requirement for inline class in signature only.
+        doTest(
+            VersionRequirement.Version(1, 3, 0), DeprecationLevel.ERROR, null, LANGUAGE_VERSION, null,
+            fqNamesWithRequirements = listOf(
+                "test.propertyOfInlineClassType",
+                "test.returnsInlineClassType",
+            ),
+            shouldBeSingleRequirement = false,
+            customLanguageVersion = LanguageVersion.KOTLIN_1_4
+        )
+        // In Kotlin 1.3, all functions and properties returning inline class values are NOT mangled,
         // and have "since 1.3" version requirement for inline class in signature only.
         doTest(
             VersionRequirement.Version(1, 3, 0), DeprecationLevel.ERROR, null, LANGUAGE_VERSION, null,
@@ -153,17 +174,6 @@ class JvmVersionRequirementTest : AbstractVersionRequirementTest() {
             ),
             shouldBeSingleRequirement = true,
             customLanguageVersion = LanguageVersion.KOTLIN_1_3
-        )
-        // In Kotlin 1.3, all functions and properties returning inline class values are NOT mangled,
-        // and have "since 1.3" version requirement for inline class in signature only.
-        doTest(
-            VersionRequirement.Version(1, 4, 30), DeprecationLevel.ERROR, null, COMPILER_VERSION, null,
-            fqNamesWithRequirements = listOf(
-                "test.C.propertyOfInlineClassType",
-                "test.C.returnsInlineClassType"
-            ),
-            shouldBeSingleRequirement = false,
-            customLanguageVersion = LanguageVersion.KOTLIN_1_4
         )
     }
 
