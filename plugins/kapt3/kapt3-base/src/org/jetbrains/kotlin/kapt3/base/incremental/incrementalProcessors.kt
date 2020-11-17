@@ -73,6 +73,7 @@ class IncrementalProcessor(private val processor: Processor, private val kind: D
 
     fun isUnableToRunIncrementally() = !kind.canRunIncrementally
     fun getGeneratedToSources() = dependencyCollector.value.getGeneratedToSources()
+    fun getGeneratedToSourcesAll() = dependencyCollector.value.getGeneratedToSourcesAll()
     fun getAggregatedTypes() = dependencyCollector.value.getAggregatedTypes()
     fun getRuntimeType(): RuntimeProcType = dependencyCollector.value.getRuntimeType()
 
@@ -94,15 +95,15 @@ internal class IncrementalFiler(private val filer: Filer) : Filer by filer {
 
     internal var dependencyCollector: AnnotationProcessorDependencyCollector? = null
 
-    override fun createSourceFile(name: CharSequence?, vararg originatingElements: Element?): JavaFileObject {
+    override fun createSourceFile(name: CharSequence, vararg originatingElements: Element?): JavaFileObject {
         val createdSourceFile = filer.createSourceFile(name, *originatingElements)
-        dependencyCollector!!.add(createdSourceFile.toUri(), originatingElements)
+        dependencyCollector!!.add(createdSourceFile.toUri(), originatingElements, name.toString())
         return createdSourceFile
     }
 
-    override fun createClassFile(name: CharSequence?, vararg originatingElements: Element?): JavaFileObject {
+    override fun createClassFile(name: CharSequence, vararg originatingElements: Element?): JavaFileObject {
         val createdClassFile = filer.createClassFile(name, *originatingElements)
-        dependencyCollector!!.add(createdClassFile.toUri(), originatingElements)
+        dependencyCollector!!.add(createdClassFile.toUri(), originatingElements, name.toString())
         return createdClassFile
     }
 
@@ -113,7 +114,7 @@ internal class IncrementalFiler(private val filer: Filer) : Filer by filer {
         vararg originatingElements: Element?
     ): FileObject {
         val createdResource = filer.createResource(location, pkg, relativeName, *originatingElements)
-        dependencyCollector!!.add(createdResource.toUri(), originatingElements)
+        dependencyCollector!!.add(createdResource.toUri(), originatingElements, null)
 
         return createdResource
     }
@@ -123,7 +124,7 @@ internal class AnnotationProcessorDependencyCollector(
     private val runtimeProcType: RuntimeProcType,
     private val warningCollector: (String) -> Unit
 ) {
-    private val generatedToSource = mutableMapOf<File, File?>()
+    private val generatedToSource = mutableMapOf<File, Pair<String?, File?>?>()
     private val aggregatedTypes = mutableSetOf<String>()
 
     private var isFullRebuild = !runtimeProcType.isIncremental
@@ -156,12 +157,12 @@ internal class AnnotationProcessorDependencyCollector(
         }
     }
 
-    internal fun add(createdFile: URI, originatingElements: Array<out Element?>) {
+    internal fun add(createdFile: URI, originatingElements: Array<out Element?>, classId: String?) {
         if (isFullRebuild) return
 
         val generatedFile = File(createdFile)
         if (runtimeProcType == RuntimeProcType.AGGREGATING) {
-            generatedToSource[generatedFile] = null
+            generatedToSource[generatedFile] = classId to null
         } else {
             val srcFiles = getSrcFiles(originatingElements)
             if (srcFiles.size != 1) {
@@ -171,12 +172,17 @@ internal class AnnotationProcessorDependencyCollector(
                             "but detected ${srcFiles.size}: [${srcFiles.joinToString()}]."
                 )
             } else {
-                generatedToSource[generatedFile] = srcFiles.single()
+                generatedToSource[generatedFile] = classId to srcFiles.single()
             }
         }
     }
 
-    internal fun getGeneratedToSources(): Map<File, File?> = if (isFullRebuild) emptyMap() else generatedToSource
+    internal fun getGeneratedToSources(): Map<File, File?> = if (isFullRebuild) emptyMap() else generatedToSource.mapValues { (_, value) ->
+        value?.second
+    }
+
+    internal fun getGeneratedToSourcesAll(): Map<File, Pair<String?, File?>?> =
+        if (isFullRebuild) emptyMap() else generatedToSource
 
     internal fun getAggregatedTypes(): Set<String> = if (isFullRebuild) emptySet() else aggregatedTypes
 
