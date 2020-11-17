@@ -1111,11 +1111,11 @@ inline fun <T, D : IrDeclaration> ReferenceSymbolTable.withReferenceScope(owner:
 val SymbolTable.allUnbound: Set<IrSymbol>
     get() {
         val r = mutableSetOf<IrSymbol>()
+        r.addAll(unboundSimpleFunctions)
         r.addAll(unboundClasses)
         r.addAll(unboundConstructors)
         r.addAll(unboundEnumEntries)
         r.addAll(unboundFields)
-        r.addAll(unboundSimpleFunctions)
         r.addAll(unboundProperties)
         r.addAll(unboundTypeAliases)
         r.addAll(unboundTypeParameters)
